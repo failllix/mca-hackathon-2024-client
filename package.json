@@ -1,0 +1,16 @@
+{
+  "name": "mca-hackathon-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:test-lobby": "npm run start -- wss://mca-websocket.felix.codes/lobby/6843a84c-d721-424a-b047-c12c51179f04",
+    "start:competition": "npm run start -- wss://mca-websocket.felix.codes/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
+  },
+  "author": "Felix Prünte",
+  "license": "ISC",
+  "dependencies": {
+    "websocket": "1.0.35"
+  }
+}
