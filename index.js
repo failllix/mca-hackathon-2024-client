@@ -1,3 +1,4 @@
+const { drawLine } = require("fresenham");
 const WebSocketClient = require("websocket").client;
 
 const client = new WebSocketClient();
@@ -61,7 +62,20 @@ client.on("connect", function (connection) {
       console.log("closest: ", closest_player);
       const degrees = aim_towards_player({ player, target: closest_player });
 
-      if (player.rotation == degrees) {
+      console.log({ x: closest_player.x, y: closest_player.y });
+
+      console.log(get_potential_fields_travelled_by_projectile({ player }));
+
+      const isTargetPotentiallyHit =
+        get_potential_fields_travelled_by_projectile({
+          player,
+        }).some(
+          (pos) => pos.x == closest_player.x && pos.y == closest_player.y
+        );
+
+      console.log(isTargetPotentiallyHit);
+
+      if (isTargetPotentiallyHit) {
         message = { ...message, action: "SHOOT" };
       } else {
         message = { ...message, action: "TURN", degrees };
@@ -111,4 +125,21 @@ const aim_towards_player = ({ player, target }) => {
 
 const radians_to_degrees = (radians) => {
   return radians * (180 / Math.PI);
+};
+
+const get_potential_fields_travelled_by_projectile = ({ player }) => {
+  const directional_vector = get_directional_vector_from_degrees(
+    player.rotation
+  );
+
+  const endX = player.x + 100 * directional_vector.x;
+  const endY = player.y + 100 * directional_vector.y;
+
+  return drawLine(player.x, player.y, endX, endY, 1);
+};
+
+const get_directional_vector_from_degrees = (degrees) => {
+  const radians = ((90.0 - degrees) * Math.PI) / 180.0;
+
+  return { x: Math.cos(radians), y: Math.sin(radians) };
 };

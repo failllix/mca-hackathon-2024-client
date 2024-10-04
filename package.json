@@ -11,6 +11,7 @@
   "author": "Felix Prünte",
   "license": "ISC",
   "dependencies": {
+    "fresenham": "^1.0.2",
     "websocket": "1.0.35"
   }
 }
