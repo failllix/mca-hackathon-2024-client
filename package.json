@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "start:test-lobby": "npm run start -- wss://mca-websocket.felix.codes/lobby/6843a84c-d721-424a-b047-c12c51179f04",
+    "start:test-lobby": "npm run start -- wss://mca-websocket.felix.codes/lobby/ddb9b20d-7204-4482-a674-09afb677c66a",
     "start:competition": "npm run start -- wss://mca-websocket.felix.codes/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
   },
   "author": "Felix Prünte",

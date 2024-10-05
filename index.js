@@ -1,7 +1,19 @@
 const { drawLine } = require("fresenham");
 const WebSocketClient = require("websocket").client;
 
+const fs = require("node:fs");
+const path = require("path");
+
 const client = new WebSocketClient();
+
+const time = Date.now();
+const pathToLog = path.join(__filename, `../.logs/${time}.txt`);
+
+fs.writeFileSync(pathToLog, "");
+
+const writeToLog = (data) => {
+  fs.appendFileSync(pathToLog, data);
+};
 
 // Check that address was passed to process
 const baseAddress = process.argv[2];
@@ -14,6 +26,8 @@ console.log(`Starting client. Connecting to ${address}`);
 
 let firstMessage = true;
 let playerId;
+
+let previousHealth = 100;
 
 // Handle connection
 client.on("connect", function (connection) {
@@ -34,10 +48,6 @@ client.on("connect", function (connection) {
   // Handle incoming messages
   connection.on("message", async function (incomingMessage) {
     let parsedMessage = JSON.parse(incomingMessage.utf8Data);
-    // console.log(
-    //   "Received new message:\n",
-    //   JSON.stringify(parsedMessage, null, 2)
-    // );
 
     if (firstMessage) {
       firstMessage = false;
@@ -57,6 +67,11 @@ client.on("connect", function (connection) {
 
       const player = get_player({ players, playerId });
 
+      if (player.health < previousHealth) {
+        writeToLog(`PLAYER ${player.id} WAS HIT`);
+        previousHealth = player.health;
+      }
+
       const closest_player = get_closest_player({ player, players });
 
       const degrees = aim_towards_player({ player, target: closest_player });
@@ -71,7 +86,7 @@ client.on("connect", function (connection) {
       const fieldsInDanger = get_fields_in_danger({ projectiles });
 
       if (is_player_is_in_danger({ player, fieldsInDanger })) {
-        const move = calculate_dodge({ player, fieldsInDanger });
+        const move = calculate_dodge({ player, projectiles });
         message = { ...message, action: move };
       } else {
         if (isTargetPotentiallyHit) {
@@ -82,7 +97,15 @@ client.on("connect", function (connection) {
       }
 
       console.log("Sending message", message);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      writeToLog(
+        `\n--------------\n${JSON.stringify(
+          parsedMessage,
+          null,
+          2
+        )}\n\nResponse:\n${JSON.stringify(message, null, 2)}\n------------\n`
+      );
+
+      // await new Promise((resolve) => setTimeout(resolve, 300));
       connection.send(JSON.stringify(message));
     } catch (error) {
       console.log(error);
@@ -93,12 +116,12 @@ client.on("connect", function (connection) {
 // Connect to lobby
 client.connect(address);
 
-const get_random_element = (arr) =>{
-  return arr[Math.floor(Math.random() * arr.length)]
-}
+const get_random_element = (arr) => {
+  return arr[Math.floor(Math.random() * arr.length)];
+};
 
 const get_random_move = () => {
-  return get_random_element(["UP", "DOWN", "LEFT", "RIGHT"])
+  return get_random_element(["UP", "DOWN", "LEFT", "RIGHT"]);
 };
 
 const get_player = ({ playerId, players }) => {
@@ -158,26 +181,30 @@ const get_directional_vector_from_degrees = (degrees) => {
 
 const is_player_is_in_danger = ({ player, fieldsInDanger }) => {
   return fieldsInDanger.some(
-    (hitField) =>
-     hitField.x == player.x && hitField.y == player.y
+    (hitField) => hitField.x == player.x && hitField.y == player.y
   );
 };
 
-const get_fields_in_danger = ({ projectiles }) => {
+const get_fields_in_danger = ({ projectiles, distanceMultiplier = 1 }) => {
   return projectiles
     .map((projectile) =>
       get_fields_travelled_into_direction({
         startX: projectile.x,
         startY: projectile.y,
         direction: projectile.direction,
-        distance: projectile.travel_distance,
+        distance: projectile.travel_distance * distanceMultiplier,
       })
     )
     .flat();
 };
 
-const calculate_dodge = ({ player, fieldsInDanger }) => {
-  const availableMoves = get_available_moves(player);  
+const calculate_dodge = ({ player, projectiles }) => {
+  const availableMoves = get_available_moves(player);
+
+  const fieldsInDanger = get_fields_in_danger({
+    projectiles,
+    distanceMultiplier: 2,
+  });
   const movesWherePlayerWontBeHit = availableMoves.filter((move) => {
     return !fieldsInDanger.some(
       (field) => field.x == move.newPosition.x && field.y == move.newPosition.y
@@ -186,8 +213,7 @@ const calculate_dodge = ({ player, fieldsInDanger }) => {
 
   if (movesWherePlayerWontBeHit.length > 0) {
     console.log("Choosing move from: ", movesWherePlayerWontBeHit);
-    
-    return get_random_element(movesWherePlayerWontBeHit).action
+    return get_random_element(movesWherePlayerWontBeHit).action;
   } else {
     console.log("Choosing random move.");
     return get_random_move();
