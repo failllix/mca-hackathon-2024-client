@@ -68,8 +68,11 @@ client.on("connect", function (connection) {
         distance: 100,
       }).some((pos) => pos.x == closest_player.x && pos.y == closest_player.y);
 
-      if (is_player_is_in_danger({ player, projectiles })) {
-        message = { ...message, action: get_random_direction() };
+      const fieldsInDanger = get_fields_in_danger({ projectiles });
+
+      if (is_player_is_in_danger({ player, fieldsInDanger })) {
+        const move = calculate_dodge({ player, fieldsInDanger });
+        message = { ...message, action: move };
       } else {
         if (isTargetPotentiallyHit) {
           message = { ...message, action: "SHOOT" };
@@ -90,9 +93,13 @@ client.on("connect", function (connection) {
 // Connect to lobby
 client.connect(address);
 
-const get_random_direction = () => {
-  return ["UP", "DOWN", "LEFT", "RIGHT"][Math.round(Math.random() * 3)]
+const get_random_element = (arr) =>{
+  return arr[Math.floor(Math.random() * arr.length)]
 }
+
+const get_random_move = () => {
+  return get_random_element(["UP", "DOWN", "LEFT", "RIGHT"])
+};
 
 const get_player = ({ playerId, players }) => {
   return players.filter((player) => player.id == playerId)[0];
@@ -137,7 +144,10 @@ const get_fields_travelled_into_direction = ({
   const endX = startX + distance * directional_vector.x;
   const endY = startY + distance * directional_vector.y;
 
-  return drawLine(startX, startY, endX, endY, 0.25);
+  return drawLine(startX, startY, endX, endY, 0.25).map(el => {return {
+    x: Math.round(el.x),
+    y: Math.round(el.y)
+  }});
 };
 
 const get_directional_vector_from_degrees = (degrees) => {
@@ -146,20 +156,73 @@ const get_directional_vector_from_degrees = (degrees) => {
   return { x: Math.cos(radians), y: Math.sin(radians) };
 };
 
-const is_player_is_in_danger = ({ player, projectiles }) => {
-  return projectiles.some((projectile) => {
-    const hitFields = get_fields_travelled_into_direction({
-      startX: projectile.x,
-      startY: projectile.y,
-      direction: projectile.direction,
-      distance: projectile.travel_distance,
-    });
+const is_player_is_in_danger = ({ player, fieldsInDanger }) => {
+  return fieldsInDanger.some(
+    (hitField) =>
+     hitField.x == player.x && hitField.y == player.y
+  );
+};
 
-    const playerIsHit = hitFields.some(
-      (hitField) =>
-        Math.round(hitField.x) == player.x && Math.round(hitField.y) == player.y
+const get_fields_in_danger = ({ projectiles }) => {
+  return projectiles
+    .map((projectile) =>
+      get_fields_travelled_into_direction({
+        startX: projectile.x,
+        startY: projectile.y,
+        direction: projectile.direction,
+        distance: projectile.travel_distance,
+      })
+    )
+    .flat();
+};
+
+const calculate_dodge = ({ player, fieldsInDanger }) => {
+  const availableMoves = get_available_moves(player);  
+  const movesWherePlayerWontBeHit = availableMoves.filter((move) => {
+    return !fieldsInDanger.some(
+      (field) => field.x == move.newPosition.x && field.y == move.newPosition.y
     );
-
-    return playerIsHit;
   });
+
+  if (movesWherePlayerWontBeHit.length > 0) {
+    console.log("Choosing move from: ", movesWherePlayerWontBeHit);
+    
+    return get_random_element(movesWherePlayerWontBeHit).action
+  } else {
+    console.log("Choosing random move.");
+    return get_random_move();
+  }
+};
+
+const get_available_moves = (player) => {
+  let availableMoves = [];
+
+  if (player.x < 27) {
+    availableMoves.push({
+      newPosition: { x: player.x + 1, y: player.y },
+      action: "RIGHT",
+    });
+  }
+  if (player.x > 2) {
+    availableMoves.push({
+      newPosition: { x: player.x - 1, y: player.y },
+      action: "LEFT",
+    });
+  }
+
+  if (player.y < 27) {
+    availableMoves.push({
+      newPosition: { x: player.x, y: player.y + 1 },
+      action: "UP",
+    });
+  }
+
+  if (player.y > 2) {
+    availableMoves.push({
+      newPosition: { x: player.x, y: player.y - 1 },
+      action: "DOWN",
+    });
+  }
+
+  return availableMoves;
 };
