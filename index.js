@@ -32,12 +32,12 @@ client.on("connect", function (connection) {
   });
 
   // Handle incoming messages
-  connection.on("message", function (incomingMessage) {
+  connection.on("message", async function (incomingMessage) {
     let parsedMessage = JSON.parse(incomingMessage.utf8Data);
-    console.log(
-      "Received new message:\n",
-      JSON.stringify(parsedMessage, null, 2)
-    );
+    // console.log(
+    //   "Received new message:\n",
+    //   JSON.stringify(parsedMessage, null, 2)
+    // );
 
     if (firstMessage) {
       firstMessage = false;
@@ -53,35 +53,33 @@ client.on("connect", function (connection) {
       const players = parsedMessage.players.filter(
         (player) => player.health > 0
       );
-      const player = get_player({ players, playerId });
+      const projectiles = parsedMessage.entities;
 
-      console.log(player);
+      const player = get_player({ players, playerId });
 
       const closest_player = get_closest_player({ player, players });
 
-      console.log("closest: ", closest_player);
       const degrees = aim_towards_player({ player, target: closest_player });
 
-      console.log({ x: closest_player.x, y: closest_player.y });
+      const isTargetPotentiallyHit = get_fields_travelled_into_direction({
+        startX: player.x,
+        startY: player.y,
+        direction: player.rotation,
+        distance: 100,
+      }).some((pos) => pos.x == closest_player.x && pos.y == closest_player.y);
 
-      console.log(get_potential_fields_travelled_by_projectile({ player }));
-
-      const isTargetPotentiallyHit =
-        get_potential_fields_travelled_by_projectile({
-          player,
-        }).some(
-          (pos) => pos.x == closest_player.x && pos.y == closest_player.y
-        );
-
-      console.log(isTargetPotentiallyHit);
-
-      if (isTargetPotentiallyHit) {
-        message = { ...message, action: "SHOOT" };
+      if (is_player_is_in_danger({ player, projectiles })) {
+        message = { ...message, action: get_random_direction() };
       } else {
-        message = { ...message, action: "TURN", degrees };
+        if (isTargetPotentiallyHit) {
+          message = { ...message, action: "SHOOT" };
+        } else {
+          message = { ...message, action: "TURN", degrees };
+        }
       }
 
       console.log("Sending message", message);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       connection.send(JSON.stringify(message));
     } catch (error) {
       console.log(error);
@@ -91,6 +89,10 @@ client.on("connect", function (connection) {
 
 // Connect to lobby
 client.connect(address);
+
+const get_random_direction = () => {
+  return ["UP", "DOWN", "LEFT", "RIGHT"][Math.round(Math.random() * 3)]
+}
 
 const get_player = ({ playerId, players }) => {
   return players.filter((player) => player.id == playerId)[0];
@@ -107,9 +109,6 @@ const get_closest_player = ({ player, players }) => {
 };
 
 const get_distance_to_player = (playerA, playerB) => {
-  console.log(playerA);
-  console.log(playerB);
-
   return Math.sqrt(
     Math.pow(playerB.x - playerA.x, 2) + Math.pow(playerB.y - playerA.y, 2)
   );
@@ -127,19 +126,40 @@ const radians_to_degrees = (radians) => {
   return radians * (180 / Math.PI);
 };
 
-const get_potential_fields_travelled_by_projectile = ({ player }) => {
-  const directional_vector = get_directional_vector_from_degrees(
-    player.rotation
-  );
+const get_fields_travelled_into_direction = ({
+  startX,
+  startY,
+  direction,
+  distance,
+}) => {
+  const directional_vector = get_directional_vector_from_degrees(direction);
 
-  const endX = player.x + 100 * directional_vector.x;
-  const endY = player.y + 100 * directional_vector.y;
+  const endX = startX + distance * directional_vector.x;
+  const endY = startY + distance * directional_vector.y;
 
-  return drawLine(player.x, player.y, endX, endY, 1);
+  return drawLine(startX, startY, endX, endY, 0.25);
 };
 
 const get_directional_vector_from_degrees = (degrees) => {
   const radians = ((90.0 - degrees) * Math.PI) / 180.0;
 
   return { x: Math.cos(radians), y: Math.sin(radians) };
+};
+
+const is_player_is_in_danger = ({ player, projectiles }) => {
+  return projectiles.some((projectile) => {
+    const hitFields = get_fields_travelled_into_direction({
+      startX: projectile.x,
+      startY: projectile.y,
+      direction: projectile.direction,
+      distance: projectile.travel_distance,
+    });
+
+    const playerIsHit = hitFields.some(
+      (hitField) =>
+        Math.round(hitField.x) == player.x && Math.round(hitField.y) == player.y
+    );
+
+    return playerIsHit;
+  });
 };
